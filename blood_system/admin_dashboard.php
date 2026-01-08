@@ -6,71 +6,74 @@ if(!isset($_SESSION['admin'])) {
 }
 include 'config.php';
 
-// ========== CRUD OPERATIONS ==========
+// CREATE
 if(isset($_POST['create'])) {
-    $name = $_POST['name'];
-    $blood_type = $_POST['blood_type'];
-    $phone = $_POST['phone'];
-    $location = $_POST['location'];
-    $conn->query("INSERT INTO donors (name, blood_type, phone, location, status) VALUES ('$name', '$blood_type', '$phone', '$location', 'available')");
+    $stmt = $conn->prepare("INSERT INTO donors (name, blood_type, phone, location) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("ssss", $_POST['name'], $_POST['blood_type'], $_POST['phone'], $_POST['location']);
+    $stmt->execute();
     header('Location: admin_dashboard.php');
+    exit;
 }
 
+// UPDATE
 if(isset($_POST['update'])) {
-    $id = $_POST['id'];
-    $name = $_POST['name'];
-    $blood_type = $_POST['blood_type'];
-    $phone = $_POST['phone'];
-    $location = $_POST['location'];
-    $conn->query("UPDATE donors SET name='$name', blood_type='$blood_type', phone='$phone', location='$location' WHERE id=$id");
+    $stmt = $conn->prepare("UPDATE donors SET name=?, blood_type=?, phone=?, location=? WHERE id=?");
+    $stmt->bind_param("ssssi", $_POST['name'], $_POST['blood_type'], $_POST['phone'], $_POST['location'], $_POST['id']);
+    $stmt->execute();
     header('Location: admin_dashboard.php');
+    exit;
 }
 
+// DELETE
 if(isset($_GET['delete'])) {
-    $conn->query("DELETE FROM donors WHERE id=" . $_GET['delete']);
+    $stmt = $conn->prepare("DELETE FROM donors WHERE id=?");
+    $stmt->bind_param("i", $_GET['delete']);
+    $stmt->execute();
     header('Location: admin_dashboard.php');
+    exit;
 }
 
-// Stats
-$total_donors = $conn->query("SELECT COUNT(*) FROM donors")->fetch_row()[0];
+// READ
 $donors = $conn->query("SELECT * FROM donors ORDER BY name")->fetch_all(MYSQLI_ASSOC);
+$total_donors = count($donors);
 ?>
 
 <!DOCTYPE html>
 <html>
 <head>
-    <title>BDMS Admin - CRUD Dashboard</title>
+    <title>Admin Dashboard - Blood Bank</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <!-- Navbar -->
     <nav class="navbar navbar-dark bg-danger">
-        <div class="container">
-            <a class="navbar-brand">
-                <i class="fas fa-tint me-2"></i>BDMS Admin
-            </a>
-            <a href="logout.php" class="btn btn-outline-light">Logout</a>
+        <div class="container-fluid">
+            <span class="navbar-brand"><i class="fas fa-tint"></i> Blood Bank Admin</span>
+            <div>
+                <a href="blood_stock.php" class="btn btn-outline-light me-2">Blood Stock</a>
+                <a href="logout.php" class="btn btn-outline-light">Logout</a>
+            </div>
         </div>
     </nav>
 
     <div class="container mt-4">
         <!-- Stats -->
         <div class="row mb-4">
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="card bg-primary text-white">
                     <div class="card-body">
-                        <h1><?= $total_donors ?></h1>
-                        <h5>Total Donors</h5>
+                        <h2><?= $total_donors ?></h2>
+                        <p>Total Donors</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- ADD DONOR FORM (CREATE) -->
-        <div class="card mb-4 shadow">
+        <!-- Add Donor Form -->
+        <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                <h5><i class="fas fa-plus"></i> Add New Donor</h5>
+                <h5>Add New Donor</h5>
             </div>
             <div class="card-body">
                 <form method="POST">
@@ -99,10 +102,10 @@ $donors = $conn->query("SELECT * FROM donors ORDER BY name")->fetch_all(MYSQLI_A
             </div>
         </div>
 
-        <!-- DONORS TABLE (READ + UPDATE + DELETE) -->
-        <div class="card shadow">
+        <!-- Donors Table -->
+        <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5><i class="fas fa-list"></i> Donors List (<?= $total_donors ?>)</h5>
+                <h5>Donors List (<?= $total_donors ?>)</h5>
             </div>
             <div class="card-body">
                 <table class="table table-hover">
@@ -125,24 +128,58 @@ $donors = $conn->query("SELECT * FROM donors ORDER BY name")->fetch_all(MYSQLI_A
                             <td><?= $donor['phone'] ?></td>
                             <td><?= $donor['location'] ?></td>
                             <td>
-                                <!-- UPDATE FORM -->
-                                <form method="POST" class="d-inline">
-                                    <input type="hidden" name="id" value="<?= $donor['id'] ?>">
-                                    <input type="text" name="name" value="<?= $donor['name'] ?>" class="form-control d-inline w-auto me-1" style="width:100px">
-                                    <input type="text" name="blood_type" value="<?= $donor['blood_type'] ?>" class="form-control d-inline w-auto me-1" style="width:80px">
-                                    <button class="btn btn-warning btn-sm me-1" name="update">Update</button>
-                                </form>
-                                <!-- DELETE -->
-                                <a href="?delete=<?= $donor['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">
-                                    Delete
-                                </a>
+                                <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#edit<?= $donor['id'] ?>">Edit</button>
+                                <a href="?delete=<?= $donor['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')">Delete</a>
                             </td>
                         </tr>
+                        
+                        <!-- Edit Modal -->
+                        <div class="modal fade" id="edit<?= $donor['id'] ?>">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5>Edit Donor</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="POST">
+                                        <div class="modal-body">
+                                            <input type="hidden" name="id" value="<?= $donor['id'] ?>">
+                                            <div class="mb-3">
+                                                <label>Name</label>
+                                                <input type="text" class="form-control" name="name" value="<?= $donor['name'] ?>" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label>Blood Type</label>
+                                                <select class="form-select" name="blood_type" required>
+                                                    <?php foreach(['O+','O-','A+','A-','B+','B-','AB+','AB-'] as $type): ?>
+                                                    <option <?= $donor['blood_type']==$type?'selected':'' ?>><?= $type ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label>Phone</label>
+                                                <input type="text" class="form-control" name="phone" value="<?= $donor['phone'] ?>" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label>Location</label>
+                                                <input type="text" class="form-control" name="location" value="<?= $donor['location'] ?>" required>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" name="update" class="btn btn-warning">Update</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
